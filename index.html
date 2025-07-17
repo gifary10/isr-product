@@ -4,34 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ISR Product Management</title>
-  <!-- Bootstrap & Font Awesome -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     :root {
       --primary-color: #4e73df;
-      --secondary-color: #858796;
+      --danger-color: #e74a3b;
     }
     body {
       background-color: #f8f9fc;
       padding-bottom: 80px;
     }
     .card {
+      border-radius: 0.35rem;
       transition: all 0.3s;
+      margin-bottom: 1.5rem;
     }
     .card:hover {
       transform: translateY(-5px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+      box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
     }
-    /* Tambahkan style lainnya sesuai kebutuhan */
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 0.35em 0.65em;
+    }
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1100;
+    }
   </style>
 </head>
 <body>
   <div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="fas fa-mobile-alt me-2"></i>Daftar Aplikasi</h2>
+      <button id="addBtn" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i> Tambah
+      </button>
+    </div>
+
     <!-- Search & Filter -->
-    <div class="row mb-3">
+    <div class="row mb-3 g-2">
       <div class="col-md-6">
-        <input type="text" id="searchInput" class="form-control" placeholder="Cari...">
+        <div class="input-group">
+          <input type="text" id="searchInput" class="form-control" placeholder="Cari aplikasi...">
+          <button id="clearSearchBtn" class="btn btn-outline-secondary" type="button">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       <div class="col-md-4">
         <select id="filterCategory" class="form-select">
@@ -39,8 +67,8 @@
         </select>
       </div>
       <div class="col-md-2">
-        <button id="refreshBtn" class="btn btn-primary w-100">
-          <i class="fas fa-sync-alt"></i>
+        <button id="refreshBtn" class="btn btn-outline-primary w-100">
+          <i class="fas fa-sync-alt"></i> Refresh
         </button>
       </div>
     </div>
@@ -49,70 +77,303 @@
     <div id="dataContainer" class="row row-cols-1 row-cols-md-3 g-4"></div>
 
     <!-- Loading Indicator -->
-    <div id="loadingIndicator" class="text-center my-4 d-none">
-      <div class="spinner-border text-primary" role="status"></div>
+    <div id="loadingIndicator" class="loading-container d-none">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Memuat...</span>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="text-center py-5 d-none">
+      <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+      <h4 class="text-muted">Tidak ada data ditemukan</h4>
+      <button id="addDataBtn" class="btn btn-primary mt-3">
+        <i class="fas fa-plus me-1"></i> Tambah Data
+      </button>
     </div>
   </div>
 
-  <!-- Script -->
+  <!-- Modals -->
+  <div class="modal fade" id="dataModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Tambah Aplikasi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="dataForm">
+            <input type="hidden" id="dataId">
+            <div class="mb-3">
+              <label for="kategori" class="form-label">Kategori <span class="text-danger">*</span></label>
+              <select class="form-select" id="kategori" required>
+                <option value="">Pilih Kategori</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="nama" class="form-label">Nama Aplikasi <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="nama" required>
+            </div>
+            <div class="mb-3">
+              <label for="deskripsi" class="form-label">Deskripsi</label>
+              <textarea class="form-control" id="deskripsi" rows="3"></textarea>
+            </div>
+            <div class="mb-3">
+              <label for="status" class="form-label">Status <span class="text-danger">*</span></label>
+              <select class="form-select" id="status" required>
+                <option value="">Pilih Status</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="link" class="form-label">Link</label>
+              <input type="url" class="form-control" id="link" placeholder="https://example.com">
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" id="saveBtn" class="btn btn-primary">
+            <span class="spinner-border spinner-border-sm d-none" id="saveSpinner"></span>
+            <span id="saveText">Simpan</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-container">
+    <div id="toast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="toastMessage"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     // Konfigurasi
-    const GS_API_URL = "https://script.google.com/macros/s/AKfycbxG41cJfJAan1EQUEhkVQR1MmaTY7xhANYWnmqmeYoiUn5iUVETNxO_GygwWaEoNxvy/exec";
+    const GS_API_URL = "https://script.google.com/macros/s/AKfycbzratVd922eqFb_EmKS7I_LTE2rAWuk_yqWO46iQAKtXQbqTPNyw8CvCbXOTutDO8Ng/exec";
+    const toastEl = document.getElementById('toast');
+    const toast = new bootstrap.Toast(toastEl);
+    let currentData = [];
 
-    // Muat data awal
+    // Inisialisasi
     document.addEventListener('DOMContentLoaded', async () => {
       await loadData();
-      loadCategories(); // Jika perlu dropdown kategori
+      loadDropdowns();
+      setupEventListeners();
     });
 
-    // Fungsi utama pengambilan data
+    // Fungsi utama
     async function loadData() {
       showLoading(true);
-      
       try {
         const response = await fetch(`${GS_API_URL}?action=getData`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
+        console.log("Data diterima:", data); // Debug
+        
+        if (!Array.isArray(data)) {
+          throw new Error("Format data tidak valid");
+        }
+
+        currentData = data;
         renderData(data);
+        
       } catch (error) {
         console.error("Error:", error);
-        alert("Gagal memuat data: " + error.message);
+        showToast(`Gagal memuat data: ${error.message}`, 'danger');
       } finally {
         showLoading(false);
       }
     }
 
-    // Render data ke UI
+    // Render data
     function renderData(data) {
       const container = document.getElementById('dataContainer');
       container.innerHTML = '';
 
+      if (data.length === 0) {
+        document.getElementById('emptyState').classList.remove('d-none');
+        return;
+      } else {
+        document.getElementById('emptyState').classList.add('d-none');
+      }
+
       data.forEach(item => {
-        const card = `
-          <div class="col">
-            <div class="card h-100">
-              <div class="card-body">
-                <h5 class="card-title">${item[2] || 'No Name'}</h5>
-                <p class="card-text">
-                  <span class="badge bg-secondary">${item[1] || 'No Category'}</span>
-                  <span class="badge bg-info ms-1">${item[4] || 'No Status'}</span>
-                </p>
-                ${item[5] ? `<a href="${item[5]}" target="_blank" class="btn btn-sm btn-primary">Buka</a>` : ''}
+        const card = document.createElement('div');
+        card.className = 'col';
+        card.innerHTML = `
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <h5 class="card-title">${item.nama}</h5>
+                <span class="badge bg-secondary">${item.kategori}</span>
               </div>
+              <p class="card-text text-muted mt-2">${item.deskripsi || '-'}</p>
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <span class="badge ${getStatusClass(item.status)}">${item.status}</span>
+                ${item.link ? `
+                  <a href="${item.link}" target="_blank" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-external-link-alt me-1"></i> Buka
+                  </a>
+                ` : ''}
+              </div>
+            </div>
+            <div class="card-footer bg-transparent border-top-0">
+              <button class="btn btn-sm btn-outline-secondary me-2 edit-btn" data-id="${item.no}">
+                <i class="fas fa-edit"></i> Edit
+              </button>
+              <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item.no}" data-name="${item.nama}">
+                <i class="fas fa-trash-alt"></i> Hapus
+              </button>
             </div>
           </div>
         `;
-        container.innerHTML += card;
+        container.appendChild(card);
+      });
+
+      // Tambahkan event listener setelah render
+      document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => editData(btn.dataset.id));
+      });
+
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => confirmDelete(btn.dataset.id, btn.dataset.name));
       });
     }
 
-    // Tampilkan loading
-    function showLoading(show) {
-      document.getElementById('loadingIndicator').style.display = 
-        show ? 'block' : 'none';
+    // Helper functions
+    function getStatusClass(status) {
+      const statusClasses = {
+        'Beli': 'bg-success',
+        'Coming Soon': 'bg-warning text-dark',
+        'Dalam Pengembangan': 'bg-info text-dark',
+        'Gratis': 'bg-primary',
+        'Trial': 'bg-secondary'
+      };
+      return statusClasses[status] || 'bg-light text-dark';
     }
 
-    // Refresh data
-    document.getElementById('refreshBtn').addEventListener('click', loadData);
+    function showLoading(show) {
+      document.getElementById('loadingIndicator').classList.toggle('d-none', !show);
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.className = `toast align-items-center text-white bg-${type} border-0`;
+      document.getElementById('toastMessage').textContent = message;
+      toast.show();
+    }
+
+    // Setup dropdowns
+    async function loadDropdowns() {
+      try {
+        // Load kategori
+        const kategoriResponse = await fetch(`${GS_API_URL}?action=getCategories`);
+        const kategori = await kategoriResponse.json();
+        const kategoriSelect = document.getElementById('kategori');
+        const filterCategory = document.getElementById('filterCategory');
+        
+        kategori.forEach(item => {
+          kategoriSelect.add(new Option(item, item));
+          filterCategory.add(new Option(item, item));
+        });
+
+        // Load status
+        const statusResponse = await fetch(`${GS_API_URL}?action=getStatuses`);
+        const statuses = await statusResponse.json();
+        const statusSelect = document.getElementById('status');
+        
+        statuses.forEach(item => {
+          statusSelect.add(new Option(item, item));
+        });
+
+      } catch (error) {
+        console.error("Error loading dropdowns:", error);
+      }
+    }
+
+    // Event handlers
+    function setupEventListeners() {
+      // Refresh data
+      document.getElementById('refreshBtn').addEventListener('click', loadData);
+      
+      // Add data
+      document.getElementById('addBtn').addEventListener('click', () => {
+        document.getElementById('modalTitle').textContent = 'Tambah Aplikasi';
+        document.getElementById('dataForm').reset();
+        document.getElementById('dataId').value = '';
+        new bootstrap.Modal('#dataModal').show();
+      });
+
+      // Search
+      document.getElementById('searchInput').addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = currentData.filter(item => 
+          item.nama.toLowerCase().includes(term) || 
+          (item.deskripsi && item.deskripsi.toLowerCase().includes(term))
+        );
+        renderData(filtered);
+      });
+
+      // Filter by category
+      document.getElementById('filterCategory').addEventListener('change', (e) => {
+        const category = e.target.value;
+        const filtered = category 
+          ? currentData.filter(item => item.kategori === category)
+          : currentData;
+        renderData(filtered);
+      });
+    }
+
+    // Edit data
+    function editData(id) {
+      const item = currentData.find(item => item.no == id);
+      if (item) {
+        document.getElementById('modalTitle').textContent = 'Edit Aplikasi';
+        document.getElementById('dataId').value = item.no;
+        document.getElementById('kategori').value = item.kategori;
+        document.getElementById('nama').value = item.nama;
+        document.getElementById('deskripsi').value = item.deskripsi || '';
+        document.getElementById('status').value = item.status;
+        document.getElementById('link').value = item.link || '';
+        new bootstrap.Modal('#dataModal').show();
+      }
+    }
+
+    // Confirm delete
+    function confirmDelete(id, name) {
+      const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+      document.getElementById('deleteItemName').textContent = name;
+      
+      document.getElementById('confirmDeleteBtn').onclick = async () => {
+        try {
+          const response = await fetch(`${GS_API_URL}?action=deleteData&id=${id}`);
+          const result = await response.json();
+          
+          if (result.success) {
+            showToast('Data berhasil dihapus', 'success');
+            await loadData();
+          } else {
+            throw new Error(result.error || 'Gagal menghapus data');
+          }
+        } catch (error) {
+          showToast(`Error: ${error.message}`, 'danger');
+        } finally {
+          modal.hide();
+        }
+      };
+      
+      modal.show();
+    }
   </script>
 </body>
 </html>
